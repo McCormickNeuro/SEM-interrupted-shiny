@@ -1,0 +1,4 @@
+"0",""
+"0","semPaths(fit.ProductScore, what='std', sizeMan=14, edge.label.cex=2, nCharNodes=0, "
+"0","         residuals=FALSE, exoVar = FALSE, rotation=2, edge.color='black', "
+"0","         fade=FALSE, edge.label.bg=TRUE, edge.label.position=.5)"

@@ -1,0 +1,3 @@
+"0","lavaanTable(fit.ProductScore, std.all=FALSE, "
+"0","            caption=""Product Score Mediation"") %>%"
+"0","  kableExtra::kable_styling(latex_options = c(""HOLD_position""))"

@@ -1,0 +1,7 @@
+"0","layout <- get_layout("""",""Item1"","""","
+"0","                    """","""","""","
+"0","                    ""Cause"","""",""Outcome"", rows=3)"
+"0",""
+"0","tidyGraph <- prettyTidySEM(fit.Item1, layout = layout)"
+"0",""
+"0","plot(tidyGraph)"
