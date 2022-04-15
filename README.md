@@ -1,4 +1,4 @@
-## Interactive Multiverse App
+## SEM, interrupted
 
 This folder contains code for a [Shiny App]() that conducts SEM-based mediation analyses. 
 
