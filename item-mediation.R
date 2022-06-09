@@ -66,8 +66,10 @@ nytimes_theme <- function(...) {
 }
 
 ## Individual-Item Mediation
-#medDat <- read.csv("~/Dropbox/Professional/projects/donders/sem-interrupted/2.scripts/SEM-interrupted/data/example02-10items.csv", header = TRUE)
+#medDat <- read.csv("~/Dropbox/Professional/projects/donders/sem-interrupted/2.scripts/SEM-interrupted-shiny/data/example02-10items.csv", header = TRUE)
+#medDat <- read.csv("~/Dropbox/Professional/projects/donders/sem-interrupted/2.scripts/SEM-interrupted-shiny/data/example01-2items.csv", header = TRUE)
 #medDat$M <- colMeans(medDat[,4:13], na.rm = TRUE)
+#medDat$M <- colMeans(medDat[,4:5], na.rm = TRUE)
 
 itemMediation <- function(data = NULL, idvar = NULL, 
                           xvar = NULL, yvar = NULL,
@@ -87,9 +89,12 @@ itemMediation <- function(data = NULL, idvar = NULL,
                     # Direct Effect
                     ", yvar," ~ c*", xvar,"
                     
+                    # Mediator Variance
+                    ", mvar," ~~ mVar*", mvar,"
+                    
                     # Computed Parameters
                     indirect := a*b
-                    prop := b / a
+                    prop := (b * mVar) / a
                     total := c + (a*b)
                     ")
     lavaan::sem(model = model, data = data, estimator = estimator,
@@ -102,45 +107,13 @@ itemMediation <- function(data = NULL, idvar = NULL,
   return(fits)
 }
 #fits <- itemMediation(data = medDat, idvar = "id", xvar = "X", yvar = "Y", itemvars = names(medDat)[4:13], compvar = "M")
-
-itemCOVMediation <- function(data = NULL, idvar = NULL, 
-                          xvar = NULL, yvar = NULL,
-                          itemvars = NULL, compvar = NULL,
-                          estimator = "ML", missing = "ML",
-                          fixed.x = TRUE, se = "standard",
-                          bootstrap = 1000){
-  
-  fits <- lapply(c(itemvars, compvar), function(mvar){
-    model <- paste0("
-                    # A Path
-                    ", mvar," ~ a*", xvar,"
-                    
-                    # B Path
-                    ", yvar," ~~ b*", mvar,"
-                    
-                    # Direct Effect
-                    ", yvar," ~ ", xvar,"
-                    
-                    # Computed Parameters
-                    prop := b / a
-                    ")
-    lavaan::sem(model = model, data = data, estimator = estimator,
-                missing = missing, fixed.x = fixed.x, se = se,
-                bootstrap = bootstrap)
-  })
-  
-  names(fits) <- c(itemvars, compvar)
-  
-  return(fits)
-}
-
+#fits <- itemMediation(data = medDat, idvar = "id", xvar = "X", yvar = "Y", itemvars = names(medDat)[4:5], compvar = "M")
 
 tableParameters <- function(fits = NULL){
   `%>%` <- magrittr::`%>%`
   
   paramTabs <- lapply(fits, function(x){
     lavaan::standardizedSolution(x) %>%
-    #lavaan::parameterEstimates(x) %>%
       dplyr::filter(label != "")
   })
   
@@ -151,12 +124,11 @@ tableParameters <- function(fits = NULL){
 plotItemMediation <- function(paramTabs = NULL, compvar = NULL){
   
   `%>%` <- magrittr::`%>%`
-  effects <- c("a", "b", "c", "indirect", "prop", "direct")
+  effects <- c("a", "b", "c", "mVar", "indirect", "prop", "direct")
 
   gList <- lapply(effects, function(eff){
     effs <- data.frame(
       y = sapply(paramTabs, '[[', "est.std")[which(effects == eff),],
-      #y = sapply(paramTabs, '[[', "est")[which(effects == eff),],
       ymin = sapply(paramTabs, '[[', "ci.lower")[which(effects == eff),],
       ymax = sapply(paramTabs, '[[', "ci.upper")[which(effects == eff),])
     
@@ -175,29 +147,29 @@ plotItemMediation <- function(paramTabs = NULL, compvar = NULL){
         var = rownames(effs)
       )
     
-    g <- ggplot2::ggplot(effs) +
-      ggplot2::geom_pointrange(
-        mapping=ggplot2::aes(x=stats::reorder(var, x1), 
-                             y=y, 
-                             ymin=ymin,
-                             ymax=ymax, 
-                             color=type)) + 
-      ggplot2::coord_flip() + 
-      ggplot2::geom_hline(yintercept = 0, 
-                          color = "black", 
-                          linetype="dashed") +
-      ggplot2::labs(y=paste0(stringr::str_to_sentence(eff),
-                             " Effect Estimate"), 
-                    x="Item") + 
-      ggplot2::theme(legend.position = 'none') + 
-      ggsci::scale_color_npg() + 
-      nytimes_theme(legend.position='none')
+    # g <- ggplot2::ggplot(effs) +
+    #   ggplot2::geom_pointrange(
+    #     mapping=ggplot2::aes(x=stats::reorder(var, x1), 
+    #                          y=y, 
+    #                          ymin=ymin,
+    #                          ymax=ymax, 
+    #                          color=type)) + 
+    #   ggplot2::coord_flip() + 
+    #   ggplot2::geom_hline(yintercept = 0, 
+    #                       color = "black", 
+    #                       linetype="dashed") +
+    #   ggplot2::labs(y=paste0(stringr::str_to_sentence(eff),
+    #                          " Effect Estimate"), 
+    #                 x="Item") + 
+    #   ggplot2::theme(legend.position = 'none') + 
+    #   ggsci::scale_color_npg() + 
+    #   nytimes_theme(legend.position='none')
     q <- ggplot2::ggplot(effs) +
       ggplot2::geom_pointrange(
         mapping=ggplot2::aes(x=stats::reorder(var, x2), 
                              y=y, 
-                             ymin=ymin,
-                             ymax=ymax, 
+                             ymin=ymax,
+                             ymax=ymin, 
                              color=type)) + 
       ggplot2::coord_flip() + 
       ggplot2::geom_hline(yintercept = 0, 
@@ -210,24 +182,37 @@ plotItemMediation <- function(paramTabs = NULL, compvar = NULL){
       ggsci::scale_color_npg() + 
       nytimes_theme(legend.position='none')
     
-    return(list(g = g, q = q))
+    return(q)
   })
   
+  pe <- paramTabs[[compvar]][paramTabs[[compvar]]$label == "prop", "est.std"]
+  se <- paramTabs[[compvar]][paramTabs[[compvar]]$label == "prop", "se"]
+  props <- sapply(paramTabs, '[[', "est.std")[which(effects == "prop"),]
+  bounds <- props > (pe + 10*se) | props < (pe - 10*se)
   library(patchwork)
-  gq = ((gList[[1]]$g + ggplot2::labs(title="Items by Effect Discrepancy") +
-           ggplot2::theme(plot.title=ggplot2::element_text(size=14))) | 
-          gList[[2]]$g | 
-          gList[[4]]$g |
-          gList[[5]]$g) / 
-    ((gList[[1]]$q + 
-        ggplot2::ggtitle("Items by Name") + 
-        ggplot2::labs(title="Items by Name") +
-        ggplot2::theme(plot.title=ggplot2::element_text(size=14))) | 
-       gList[[2]]$q | 
-       gList[[4]]$q |
-       gList[[5]]$q)
+  # gq = ((gList[[1]]$g + ggplot2::labs(title="Items by Effect Discrepancy") +
+  #          ggplot2::theme(plot.title=ggplot2::element_text(size=14))) | 
+  #         gList[[2]]$g | 
+  #         gList[[4]]$g |
+  #         gList[[5]]$g) / 
+  #   ((gList[[1]]$q + 
+  #       ggplot2::ggtitle("Items by Name") + 
+  #       ggplot2::labs(title="Items by Name") +
+  #       ggplot2::theme(plot.title=ggplot2::element_text(size=14))) | 
+  #      gList[[2]]$q | 
+  #      gList[[4]]$q |
+  #      gList[[5]]$q)
+  g <- gList[[1]] | 
+    gList[[2]] | 
+    gList[[5]] | 
+    (gList[[6]] + 
+       ggplot2::coord_flip(ylim = c((pe - (10*se)), (pe + 10*se))) +
+       ggplot2::labs(y = ifelse(any(bounds),
+         "Proportional Effect Estimate\n(some estimates outside the frame)",
+         "Proportional Effect Estimate"
+         )))
   
-  gq = gq +
+  g <- g +
     plot_annotation(title = "Distribution of Mediation Effects",
                     theme = ggplot2::theme(
                       plot.title = ggplot2::element_text(
@@ -236,7 +221,114 @@ plotItemMediation <- function(paramTabs = NULL, compvar = NULL){
     ggplot2::theme(plot.background = ggplot2::element_rect(
       fill = "white", color = "gray95"))
   
-  return(gq)
+  return(g)
   
 }
+#paramTabs <- paramTabs[c(1:4,7:9,11)]
 #testplot <- plotItemMediation(paramTabs = paramTabs, compvar = "M")
+#testplot
+
+proportionalTest <- function(data = NULL, idvar = NULL,
+                             xvar = NULL, yvar = NULL,
+                             itemvars = NULL, compvar = NULL,
+                             estimator = "ML", missing = "ML",
+                             fixed.x = TRUE, se = "standard",
+                             bootstrap = 1000){
+  
+  `%>%` <- magrittr::`%>%`
+  
+  M.model <- paste0("
+                    # A Path
+                    ", compvar," ~ a*", xvar,"
+                    
+                    # B Covariance
+                    ", yvar," ~~ b*", compvar,"
+                    
+                    # Direct Effect
+                    ", yvar," ~ c*", xvar,"
+                    
+                    # Computed Parameters
+                    prop := b / a
+                    ")
+  M.fit <- lavaan::sem(model = M.model, data = data, estimator = estimator,
+                       missing = missing, fixed.x = fixed.x, se = se,
+                       bootstrap = bootstrap)
+  M.prop <- lavaan::parameterEstimates(M.fit) %>%
+    dplyr::filter(label == "prop")
+  
+  item.model.free <- paste0("
+    # A Paths
+    ", paste(
+      sapply(1:length(itemvars), function(x){
+        paste0(itemvars[x], " ~ a", x, "*", xvar)
+      }),
+      collapse = "\n"),"
+      
+    # B Covariances
+    ", paste(
+      sapply(1:length(itemvars), function(x){
+        paste0(yvar, " ~~ b", x, "*", itemvars[x])
+      }),
+      collapse = "\n"),"
+      
+    # Direct Effect
+    ", yvar," ~ c*", xvar,"
+    
+    # Computed Parameters
+    ", paste(
+      sapply(1:length(itemvars), function(x){
+        paste0("prop", x, " := b", x, " / a", x)
+      }),
+      collapse = "\n"),"
+  ")
+  free.fit <- lavaan::sem(model = item.model.free, data = data, estimator = estimator,
+                          missing = missing, fixed.x = fixed.x, se = se,
+                          bootstrap = bootstrap)
+  
+  item.model.const <- paste0("
+    # A Paths
+    ", paste(
+      sapply(1:length(itemvars), function(x){
+        paste0(itemvars[x], " ~ a", x, "*", xvar)
+      }),
+      collapse = "\n"),"
+      
+    # B Covariances
+    ", paste(
+      sapply(1:length(itemvars), function(x){
+        paste0(yvar, " ~~ b", x, "*", itemvars[x])
+      }),
+      collapse = "\n"),"
+      
+    # Direct Effect
+    ", yvar," ~ c*", xvar,"
+    
+    # Computed Parameters
+    ", paste(
+      sapply(1:length(itemvars), function(x){
+        paste0("prop", x, " := b", x, " / a", x)
+      }),
+      collapse = "\n"),"
+    ", paste(
+      sapply(1:length(itemvars), function(x){
+        paste0("a", x, " == b", x, " / ", M.prop$est)
+      }),
+      collapse = "\n"),"
+  ")
+  const.fit <- lavaan::sem(model = item.model.const, data = data, estimator = estimator,
+                           missing = missing, fixed.x = fixed.x, se = se,
+                           bootstrap = bootstrap)
+  
+  LRT <- lavaan::lavTestLRT(free.fit, const.fit)
+  MIs <- lavaan::modindices(const.fit, sort = TRUE, minimum.value = 5)
+  
+  return(list(med.fit = M.fit,
+              free.fit = free.fit,
+              constrain.fit = const.fit,
+              LRT = LRT,
+              MIs = MIs))
+}
+#tests <- propTest(data = medDat, idvar = "id", xvar = "X", yvar = "Y", itemvars = names(medDat)[4:13], compvar = "M")
+
+
+

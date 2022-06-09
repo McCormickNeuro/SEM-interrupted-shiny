@@ -225,15 +225,13 @@ server <- function(input, output, session) {
       selectInput(inputId = "selectexample",
                   label = "Select Dataset",
                   choices = c("",
-                              "10 Item Scale Score" = "scale10",
-                              "Grey Matter Measures" = "gmvolume"),
+                              "Proportional Mediation: 4-Item Sum Score" = "propSum",
+                              "Interrupted Mediation: Grey Matter Measures" = "gmvolume",
+                              "Suppressed Mediation: 10 Item Scale Score" = "scale10"),
                   selected = "",
                   multiple = FALSE)
     }
   })
-  
-  
-  
   
   ## Read In User-File (need to write function for other data types)
   userdata <- reactive({
@@ -254,6 +252,8 @@ server <- function(input, output, session) {
         read.csv("./data/example01-2items.csv")
       } else if (input$selectexample == "scale10"){
         read.csv("./data/example02-10items.csv")
+      } else if (input$selectexample == "propSum"){
+        read.csv("./data/example03-4items.csv")
       }
     }
   })
@@ -659,12 +659,6 @@ server <- function(input, output, session) {
   #-----------------------------------------------------------------------------  
   # Page 3: Individual Item Mediation Results
   #-----------------------------------------------------------------------------
-  ## Figure out how to display loading text while new analyses run
-  #ItemFits_ready <- reactiveValues(flag = 0)
-  # output$RunningWait <- renderPrint({
-  #   paste0("The SEM elves are working hard in the background...
-  #                                please be patient")
-  # })
   
   ## Individual Item Mediation Functions
   ItemFits <- eventReactive(input$RunAnalyses, {
@@ -714,6 +708,16 @@ server <- function(input, output, session) {
       shiny::br(),
       fluidRow(
         box(
+          title = h3(tags$b("Proportional Constraint Test")), width = NULL, status = "primary",
+          collapsible = TRUE, collapsed = FALSE,
+          div(style = "overflow-x: scroll", 
+              uiOutput("PropTestResults"))
+        )
+      ),
+      shiny::br(),
+      shiny::br(),
+      fluidRow(
+        box(
           title = h3(tags$b("Composite Mediator Results")), width = NULL, status = "primary",
           collapsible = TRUE, collapsed = FALSE,
           div(style = "overflow-x: scroll", 
@@ -752,7 +756,7 @@ server <- function(input, output, session) {
         )
       )
     })
-    output$EffDistPlot <- renderPlot(width = 1000, height = 400, {
+    output$EffDistPlot <- renderPlot(width = 1200, height = 400, {
       req(paramTabs())
       Effplot()
     })
@@ -761,10 +765,148 @@ server <- function(input, output, session) {
       content = function(file){
         ggplot2::ggsave(filename = file,
                         plot = Effplot(),
-                        width = 10,
+                        width = 17,
                         height = 5,
                         scale = 1.25,
                         dpi = 'retina')}
+    )
+    
+    ### Proportionality Model Comparison Test
+    output$PropTestResults <- renderUI({
+      fluidPage(
+        fluidRow(
+          column(
+            width = 8,
+            verbatimTextOutput("propLRT")
+          )
+        ),
+        fluidRow(
+          column(
+            width = 8,
+            verbatimTextOutput("propFit")
+          ),
+          column(
+            width = 4,
+            selectInput(inputId = "selectSpec", 
+                        label = "Select Specification:",
+                        choices = c("Freely-Estimated" = "free.fit",
+                                    "Constrained" = "constrain.fit"),
+                        selected = "free"),
+            shiny::br(),
+            shiny::br(),
+            downloadButton(outputId = "DLSpec", 
+                           label = "Download Proportional Test Results",
+                           class = "download")
+          )
+        )
+      )
+    })
+    
+    propTest <- reactive({
+      
+      proportionalTest(data = MediationData(),
+                       idvar = input$`id-dropdown`,
+                       xvar = xName(), yvar = yName(),
+                       itemvars = itemNames(), compvar = compName(),
+                       estimator = input$estimatorOpt,
+                       missing = input$missingOpt,
+                       fixed.x = as.logical(input$fixedXOpt),
+                       se = input$seOpt,
+                       bootstrap = input$userBootsamples)
+      
+    })
+    
+    output$propLRT <- renderPrint(width = 1000, {
+      
+      propTest()$LRT
+      
+    })
+    
+    output$propFit <- renderPrint(width = 1000, {
+      
+      lavaan::summary(propTest()[[input$selectSpec]],
+                      standardize = ifelse(is.null(input$stdOpt),
+                                           FALSE,
+                                           ifelse(input$stdOpt != "None",
+                                                  TRUE,
+                                                  FALSE)),
+                      std.nox = (input$stdOpt == "std.nox"),
+                      rsquare = TRUE)
+      
+    })
+    
+    output$DLSpec <- downloadHandler(
+      filename = function(){paste0("ProportionalConstraintTest-", 
+                                   nickname(), 
+                                   ".zip")},
+      content = function(zipname){
+        fs <- c()
+        owd <- setwd(tempdir())
+        on.exit(setwd(owd))
+        
+        fs = c(paste0("ProportionalConstraintTest-FreelyEstimated-", nickname(),".csv"),
+               paste0("ProportionalConstraintTest-FreelyEstimated-", nickname(),".txt"),
+               paste0("ProportionalConstraintTest-Constrained-", nickname(),".csv"),
+               paste0("ProportionalConstraintTest-Constrained-", nickname(),".txt"),
+               paste0("ProportionalConstraintTest-LRT-", nickname(),".txt"))
+        
+        write.csv(lavaan::summary(propTest()[["free.fit"]],
+                                  standardize = ifelse(is.null(input$stdOpt),
+                                                       FALSE,
+                                                       ifelse(input$stdOpt != "None",
+                                                              TRUE,
+                                                              FALSE)),
+                                  std.nox = (input$stdOpt == "std.nox"),
+                                  rsquare = TRUE), 
+                  file = fs[1], 
+                  row.names=FALSE)
+        capture.output(lavaan::summary(propTest()[["free.fit"]],
+                                       standardize = ifelse(is.null(input$stdOpt),
+                                                            FALSE,
+                                                            ifelse(input$stdOpt != "None",
+                                                                   TRUE,
+                                                                   FALSE)),
+                                       std.nox = (input$stdOpt == "std.nox"),
+                                       rsquare = TRUE),
+                       file = fs[2],
+                       type = "output")
+        write.csv(lavaan::summary(propTest()[["constrain.fit"]],
+                                  standardize = ifelse(is.null(input$stdOpt),
+                                                       FALSE,
+                                                       ifelse(input$stdOpt != "None",
+                                                              TRUE,
+                                                              FALSE)),
+                                  std.nox = (input$stdOpt == "std.nox"),
+                                  rsquare = TRUE), 
+                  file = fs[3], 
+                  row.names=FALSE)
+        capture.output(lavaan::summary(propTest()[["constrain.fit"]],
+                                       standardize = ifelse(is.null(input$stdOpt),
+                                                            FALSE,
+                                                            ifelse(input$stdOpt != "None",
+                                                                   TRUE,
+                                                                   FALSE)),
+                                       std.nox = (input$stdOpt == "std.nox"),
+                                       rsquare = TRUE),
+                       file = fs[4],
+                       type = "output")
+        capture.output(propTest()[["LRT"]],
+                       file = fs[5],
+                       type = "output")
+        
+        
+        zip::zip(zipfile=zipname, files=fs)
+      },
+      contentType = "application/zip"
+    )
+    
+    output$DLMplusDat <- downloadHandler(
+      filename = paste0("mplusData-", nickname(), ".dat"),
+      content = function(file){
+        MplusAutomation::prepareMplusData(df = MediationData(),
+                                          filename = file,
+                                          inpfile = FALSE)
+      }
     )
     
     ### Composite Mediation Model Output
@@ -1300,6 +1442,15 @@ server <- function(input, output, session) {
       shiny::br(),
       fluidRow(
         box(
+          title = h3(tags$b("Proportional Test Modification Indices")), width = NULL,
+          status = "primary", collapsible = TRUE, collapsed = FALSE,
+          div(style = "overflow-x: hidden", uiOutput("propMIs"))
+        )
+      ),
+      shiny::br(),
+      shiny::br(),
+      fluidRow(
+        box(
           title = h3(tags$b("Composite Model Modification Indices")), width = NULL,
           status = "primary", collapsible = TRUE, collapsed = FALSE,
           div(style = "overflow-x: hidden", uiOutput("compMIs"))
@@ -1317,6 +1468,34 @@ server <- function(input, output, session) {
       )
     )
   })
+  
+  output$propMIs <- renderUI({
+    fixedRow(
+      column(width = 10,
+             DT::DTOutput("printPropMI"),
+             shiny::br(),
+             shiny::br(),
+             downloadButton(outputId = "DLPropMI", 
+                            label = "Download Proportional Test MIs",
+                            class = "download"),
+             shiny::br(),
+             shiny::br()
+      )
+    )
+  })
+  
+  output$printPropMI <- DT::renderDataTable({
+    DT::datatable(propTest()$MIs, filter = "top")
+  }, server = TRUE)
+  
+  output$DLPropMI <- downloadHandler(
+    filename = paste0("ProportionalTestMIs-", nickname(), ".csv"),
+    content = function(file){
+      write.csv(propTest()$MIs,
+                file = file,
+                row.names = FALSE)
+    }
+  )
   
   output$compMIs <- renderUI({
     fluidPage(
@@ -1557,10 +1736,81 @@ server <- function(input, output, session) {
                          paste0("MediationEffectPlot-", nickname(), ".png"))
       ggplot2::ggsave(filename = fname,
                       plot = Effplot(),
-                      width = 10,
+                      width = 17,
                       height = 5,
                       scale = 1.25,
                       dpi = 'retina')
+      
+      subsubdir <- file.path(subdir, "Proportional-Constraints"); dir.create(subsubdir)
+      fname <- file.path(subsubdir,
+                         paste0(compName(), 
+                                "ProportionalConstraintTest-FreelyEstimated-",
+                                nickname(), 
+                                ".csv"))
+      write.csv(lavaan::summary(propTest()[["free.fit"]],
+                                standardize = ifelse(is.null(input$stdOpt),
+                                                     FALSE,
+                                                     ifelse(input$stdOpt != "None",
+                                                            TRUE,
+                                                            FALSE)),
+                                std.nox = (input$stdOpt == "std.nox"),
+                                rsquare = TRUE), 
+                file = fname, 
+                row.names=FALSE)
+      fname <- file.path(subsubdir,
+                         paste0(compName(), 
+                                "ProportionalConstraintTest-FreelyEstimated-",
+                                nickname(), 
+                                ".txt"))
+      capture.output(lavaan::summary(propTest()[["free.fit"]],
+                                     standardize = ifelse(is.null(input$stdOpt),
+                                                          FALSE,
+                                                          ifelse(input$stdOpt != "None",
+                                                                 TRUE,
+                                                                 FALSE)),
+                                     std.nox = (input$stdOpt == "std.nox"),
+                                     rsquare = TRUE),
+                     file = fname,
+                     type = "output")
+      fname <- file.path(subsubdir,
+                         paste0(compName(), 
+                                "ProportionalConstraintTest-Constrained-",
+                                nickname(), 
+                                ".csv"))
+      write.csv(lavaan::summary(propTest()[["constrain.fit"]],
+                                standardize = ifelse(is.null(input$stdOpt),
+                                                     FALSE,
+                                                     ifelse(input$stdOpt != "None",
+                                                            TRUE,
+                                                            FALSE)),
+                                std.nox = (input$stdOpt == "std.nox"),
+                                rsquare = TRUE), 
+                file = fname, 
+                row.names=FALSE)
+      fname <- file.path(subsubdir,
+                         paste0(compName(), 
+                                "ProportionalConstraintTest-Constrained-",
+                                nickname(), 
+                                ".txt"))
+      capture.output(lavaan::summary(propTest()[["constrain.fit"]],
+                                     standardize = ifelse(is.null(input$stdOpt),
+                                                          FALSE,
+                                                          ifelse(input$stdOpt != "None",
+                                                                 TRUE,
+                                                                 FALSE)),
+                                     std.nox = (input$stdOpt == "std.nox"),
+                                     rsquare = TRUE),
+                     file = fname,
+                     type = "output")
+      fname <- file.path(subsubdir,
+                         paste0(compName(), 
+                                "ProportionalConstraintTest-LRT-",
+                                nickname(), 
+                                ".txt"))
+      capture.output(propTest()[["LRT"]],
+                     file = fname,
+                     type = "output")
+      
       
       subsubdir <- file.path(subdir, "Composite-Results"); dir.create(subsubdir)
       fname <- file.path(subsubdir,
@@ -1701,6 +1951,13 @@ server <- function(input, output, session) {
       # Latent Variable Diagnostic Output
       if (!grepl("Warning:", lvCompSyntax()$lavaan_syntax)){
         subdir <- file.path(zipdir, "Latent-Variable-Diagnostics"); dir.create(subdir)
+        subsubdir <- file.path(subdir, "ProportionalTestMIs"); dir.create(subsubdir)
+        fname <- file.path(subsubdir,
+                           paste0("ProportionalTestMIs-", nickname(), ".csv"))
+        write.csv(propTest()$MIs,
+                  file = fname,
+                  row.names = FALSE)
+        
         subsubdir <- file.path(subdir, "Composite-LV-Diagnostics"); dir.create(subsubdir)
         fname <- file.path(subsubdir,
                            paste0("CompositeMIPlot-", nickname(), ".png"))

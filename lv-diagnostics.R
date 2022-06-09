@@ -87,27 +87,29 @@ plotTidyMIs <- function(fitObj = NULL,
       ]
     }
     
-    tidySEM::edges(tidyPlot) %>%
-      add_row(
-        from = miTable$rhs, rhs = miTable$rhs,
-        to = miTable$lhs, lhs = miTable$lhs, op = miTable$op,
-        arrow = ifelse(miTable$op == "~~", "both", "last"),
-        label = paste0(miTable$mi),
-        connect_from = ifelse(miTable$rhs %in% itemNames, "bottom", "top"),
-        connect_to = ifelse(miTable$lhs %in% itemNames, "bottom", "top"),
-        est = paste0(miTable$mi), se = "0.00", pval = NA, 
-        confint = "[0.00, 0.00]", est_sig = paste0(miTable$mi), 
-        est_std = paste0(miTable$sepc.all), se_std = "0.00", pval_std = NA, 
-        confint_std = "[0, 0]", est_sig_std = paste0(miTable$mi),
-        label_results = "TEST", lavaan_label = "", show = TRUE,
-        label_colour = "black", label_fill = "white", 
-        label_location = runif(length(miTable$mi), (1/3), (2/3)),
-        curvature = 75,
-        colour = "red",
-        linetype = 1,
-        size = miTable$normMI,
-        alpha = 1
-      ) -> tidySEM::edges(tidyPlot)
+    if (nrow(miTable) > 0){
+      tidySEM::edges(tidyPlot) %>%
+        add_row(
+          from = miTable$rhs, rhs = miTable$rhs,
+          to = miTable$lhs, lhs = miTable$lhs, op = miTable$op,
+          arrow = ifelse(miTable$op == "~~", "both", "last"),
+          label = paste0(miTable$mi),
+          connect_from = ifelse(miTable$rhs %in% itemNames, "bottom", "top"),
+          connect_to = ifelse(miTable$lhs %in% itemNames, "bottom", "top"),
+          est = paste0(miTable$mi), se = "0.00", pval = NA, 
+          confint = "[0.00, 0.00]", est_sig = paste0(miTable$mi), 
+          est_std = paste0(miTable$sepc.all), se_std = "0.00", pval_std = NA, 
+          confint_std = "[0, 0]", est_sig_std = paste0(miTable$mi),
+          label_results = "TEST", lavaan_label = "", show = TRUE,
+          label_colour = "black", label_fill = "white", 
+          label_location = runif(length(miTable$mi), (1/3), (2/3)),
+          curvature = 75,
+          colour = "red",
+          linetype = 1,
+          size = miTable$normMI,
+          alpha = 1
+        ) -> tidySEM::edges(tidyPlot)
+    }
   }
   
   return(tidyPlot)
